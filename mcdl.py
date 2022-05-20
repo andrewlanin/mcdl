@@ -76,11 +76,16 @@ def download(version, path):
 
 	natives_path = path / 'versions' / version / 'natives'
 
+	if platform.system() == 'Windows':
+		class_path = ';'.join(class_path)
+	else:
+		class_path = ':'.join(class_path)
+
 	command = ' '.join(command)
 	command = command.replace(r'${natives_directory}', str(natives_path))
 	command = command.replace(r'${launcher_name}', 'mcdl')
 	command = command.replace(r'${launcher_version}', '1.0')
-	command = command.replace(r'${classpath}', ':'.join(class_path))
+	command = command.replace(r'${classpath}', class_path)
 	command = command.replace(r'${auth_player_name}', 'Player')
 	command = command.replace(r'${version_name}', version)
 	command = command.replace(r'${game_directory}', '.')
@@ -92,6 +97,7 @@ def download(version, path):
 	command = command.replace(r'${auth_xuid}', '0000')
 	command = command.replace(r'${user_type}', 'mojang')
 	command = command.replace(r'${version_type}', manifest['type'])
+	command = command.replace(r'Windows 10', '"Windows 10"')
 
 	if platform.system() == 'Windows':
 		bat_path = path / ('mc-' + version + '.bat')
