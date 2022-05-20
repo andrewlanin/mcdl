@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-import json, os, pathlib, platform, urllib.request, uuid, stat, sys
+import argparse, json, os, pathlib, platform, urllib.request, uuid, stat, sys
 
-def download(version, path):
+def download(version, player_name):
+	path = pathlib.Path()
 	version_manifest_url = 'https://launchermeta.mojang.com/mc/game/version_manifest.json'
 	version_manifest_path = path / 'versions' / 'version_manifest_v2.json'
 	download_file(version_manifest_url, version_manifest_path)
@@ -86,7 +87,7 @@ def download(version, path):
 	command = command.replace(r'${launcher_name}', 'mcdl')
 	command = command.replace(r'${launcher_version}', '1.0')
 	command = command.replace(r'${classpath}', class_path)
-	command = command.replace(r'${auth_player_name}', 'Player')
+	command = command.replace(r'${auth_player_name}', player_name)
 	command = command.replace(r'${version_name}', version)
 	command = command.replace(r'${game_directory}', '.')
 	command = command.replace(r'${assets_root}', 'assets')
@@ -152,4 +153,9 @@ def append_flat(l, val):
 		l.append(val)
 
 if __name__ == '__main__':
-	download('1.19-pre1', pathlib.Path())
+	parser = argparse.ArgumentParser(description='Download Minecraft client')
+	parser.add_argument('-v', '--version', type=str, default='1.18.2', help='game version')
+	parser.add_argument('-n', '--name', type=str, default='Player', help='player name')
+
+	args = parser.parse_args()
+	download(args.version, args.name)
