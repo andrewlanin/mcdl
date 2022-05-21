@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, os, pathlib, platform, urllib.request, uuid, stat, sys
+import argparse, hashlib, json, os, pathlib, platform, urllib.request, uuid, stat, sys
 
 def list_versions():
 	manifest = get_versions_manifest()
@@ -17,11 +17,20 @@ def download(version, player_name):
 	path = pathlib.Path()
 	manifest = get_version_manifest(version)
 	version_id = manifest['id']
+
+	downloads = []
 	class_path = []
 
+	client_url = manifest['downloads']['client']['url']
 	client_path = path / 'versions' / version_id / (version_id + '.jar')
-	download_file(manifest['downloads']['client']['url'], client_path)
+	chient_sha1 = manifest['downloads']['client']['sha1']
 	class_path.append(str(client_path))
+	if not verify_file(client_path, chient_sha1):
+		downloads.append({
+			'url': client_url,
+			'path': client_path,
+			'sha1': chient_sha1
+		})
 
 	libs_path = path / 'libraries'
 	for lib_info in manifest['libraries']:
@@ -29,22 +38,35 @@ def download(version, player_name):
 			if not check_rules(lib_info['rules']):
 				continue
 
-		url = lib_info['downloads']['artifact']['url']
+		lib_url = lib_info['downloads']['artifact']['url']
 		lib_path = libs_path / lib_info['downloads']['artifact']['path']
-		download_file(url, lib_path)
+		lib_sha1 = lib_info['downloads']['artifact']['sha1']
 		class_path.append(str(lib_path))
+		if not verify_file(lib_path, lib_sha1):
+			downloads.append({
+				'url': lib_url,
+				'path': lib_path,
+				'sha1': lib_sha1
+			})
 
 	assets_path = path / 'assets'
 	assets_version = manifest['assetIndex']['id']
 	assets_index_path = assets_path / 'indexes' / (assets_version + '.json')
 	download_file(manifest['assetIndex']['url'], assets_index_path)
-	assets_manifest = load_json(assets_index_path)
+	assets_manifest = load_json_file(assets_index_path)
 
 	for asset in assets_manifest['objects'].values():
-		hash = asset['hash']
-		url = 'http://resources.download.minecraft.net/' + hash[:2] + '/' + hash
-		asset_path = assets_path / 'objects' / hash[:2] / hash
-		download_file(url, asset_path)
+		asset_sha1 = asset['hash']
+		asset_url = 'http://resources.download.minecraft.net/' + asset_sha1[:2] + '/' + asset_sha1
+		asset_path = assets_path / 'objects' / asset_sha1[:2] / asset_sha1
+		if not verify_file(asset_path, asset_sha1):
+			downloads.append({
+				'url': asset_url,
+				'path': asset_path,
+				'sha1': asset_sha1
+			})
+
+	download_files(downloads)
 
 	command = ['java']
 
@@ -126,27 +148,69 @@ def get_version_manifest(version, versions_manifest=None):
 			version_info = info
 			break
 	if version_info is None:
-		raise VersionException()
+		raise VersionException(version)
 
 	return request_json(version_info['url'])
 
 def request_json(url):
 	return json.load(urllib.request.urlopen(url))
 
-def load_json(path):
+def load_json_file(path):
 	with open(str(path)) as f:
 		return json.load(f)
+
+def download_files(downloads):
+	total = len(downloads)
+	if total == 0:
+		print('Everything is up-to-date')
+		return
+
+	for i, download in enumerate(downloads):
+		idx = i + 1
+		url = download['url']
+		path = download['path']
+		sha1 = download['sha1']
+
+		retries = 5
+		while retries > 0:
+			print('[{}/{}] Downloading {}...'.format(idx, total, url), flush=True)
+			download_file(url, path)
+			if verify_file(path, sha1):
+				break
+			else:
+				print('[{}/{}] Invalid hash, retrying...'.format(idx, total))
+				retries -= 1
+
+		if retries == 0:
+			raise VerificationException(url, path, sha1, calc_file_sha1(path))
 
 def download_file(url, path):
 	if path.exists():
 		return
 
-	print('--> Downloading {}...'.format(url), flush=True)
-
 	if not path.parent.exists():
 		path.parent.mkdir(parents=True, exist_ok=True)
 
 	urllib.request.urlretrieve(url, str(path))
+
+def verify_file(path, sha1):
+	return calc_file_sha1(path) == sha1
+
+def calc_file_sha1(path):
+	digest = hashlib.sha1()
+
+	try:
+		with open(path, 'rb') as f:
+			chunk_size = 1024 * 1024
+			while True:
+				data = f.read(chunk_size)
+				if not data:
+					break
+				digest.update(data)
+	except FileNotFoundError:
+		return None
+
+	return digest.hexdigest()
 
 def check_rules(rules):
 	for rule in rules:
@@ -173,8 +237,16 @@ def append_flat(l, val):
 	else:
 		l.append(val)
 
+class VerificationException(Exception):
+	def __init__(self, url, path, expected_sha1, real_sha1):
+		self.url = url
+		self.path = path
+		self.expected_sha1 = expected_sha1
+		self.real_sha1 = real_sha1
+
 class VersionException(Exception):
-	pass
+	def __init__(self, version):
+		self.version = version
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Download Minecraft client')
@@ -199,8 +271,19 @@ if __name__ == '__main__':
 
 	try:
 		download(args.version, args.name)
-	except VersionException:
-		print('Unknown version: {}.'.format(args.version))
+	except VersionException as e:
+		print('Unknown version: {}.'.format(e.version))
 		print('Run "mcdl.py --list-versions" to see all available versions.')
 		sys.exit(1)
-
+	except VerificationException as e:
+		print('''Failed to download file, hash mismatch:
+            url = {}
+           path = {}
+  expected_sha1 = {}
+      real_sha1 = {}'''.format(
+			e.url,
+			e.path,
+			e.expected_sha1,
+			e.real_sha1
+		))
+		sys.exit(1)
