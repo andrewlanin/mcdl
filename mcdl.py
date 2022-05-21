@@ -105,6 +105,8 @@ def download_client(manifest, output_path):
                 native_lib_info = classifiers['natives-linux']
             elif os == 'Darwin' and 'natives-macos' in classifiers:
                 native_lib_info = classifiers['natives-macos']
+            elif os == 'Darwin' and 'natives-osx' in classifiers:
+                native_lib_info = classifiers['natives-osx']
 
         if native_lib_info:
             if verbose:
