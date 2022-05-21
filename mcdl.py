@@ -5,6 +5,7 @@ import json
 import os
 import pathlib
 import platform
+import re
 import urllib.request
 import uuid
 import stat
@@ -352,28 +353,66 @@ def add_argument(command, arg):
 
 
 def check_rules(rules):
+    result = False
     for rule in rules:
-        if not check_rule(rule):
-            return False
-    return True
+        allow = check_rule(rule)
+        if verbose:
+            print('Rule {}: allow={}'.format(rule, allow), file=sys.stderr, flush=True)
+        if not allow is None:
+            result = allow
+    return result
 
 
 def check_rule(rule):
-    match = False
-    if 'os' in rule:
-        if 'name' in rule['os']:
-            current_os = platform.system()
-            required_os = rule['os']['name']
-            match = (
-                (current_os == 'Windows' and required_os == 'windows') or
-                (current_os == 'Linux' and required_os == 'linux') or
-                (current_os == 'Darwin' and required_os == 'osx')
+    match = True
+    allow = True
+
+    for k, v in rule.items():
+        if k == 'action':
+            allow = v == 'allow'
+        elif k =='os':
+            for k, v in v.items():
+                if k == 'name':
+                    current_os = platform.system()
+                    match = match and (
+                        (current_os == 'Windows' and v == 'windows') or
+                        (current_os == 'Linux' and v == 'linux') or
+                        (current_os == 'Darwin' and v == 'osx')
+                    )
+                elif k == 'arch':
+                    match = match and (platform.machine() == v)
+                elif k == 'version':
+                    match = match and re.match(v, platform.version())
+                else:
+                    print(
+                        'WARN: Unexpected key os.{} in rule {}'.format(k, rule),
+                        file=sys.stderr,
+                        flush=True
+                    )
+        elif k == 'features':
+            for feature, enabled in v.items():
+                if feature == 'is_demo_user':
+                    match = match and not enabled
+                elif feature == 'has_custom_resolution':
+                    match = match and not enabled
+                else:
+                    match = match and not enabled
+                    print(
+                        'Unknown feature {} in rule {}'.format(feature, rule),
+                        file=sys.stderr,
+                        flush=True
+                    )
+        else:
+            print(
+                'WARN: Unexpected key {} in rule {}'.format(k, rule),
+                file=sys.stderr,
+                flush=True
             )
 
-    if rule['action'] == 'allow':
-        return match
-    else:
-        return not match
+    if match:
+        return allow
+
+    return None
 
 
 def make_class_path(output_path, jars):
