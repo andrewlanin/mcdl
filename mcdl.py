@@ -11,6 +11,9 @@ import stat
 import sys
 
 
+verbose = False
+
+
 def list_versions():
     manifest = get_versions_manifest()
     print('Latest release:  {}'.format(manifest['latest']['release']))
@@ -45,7 +48,7 @@ def download_client(manifest, output_path):
     jars = []
     downloads = []
 
-    print('Verifying instalation...')
+    print('Verifying instalation...', file=sys.stderr, flush=True)
 
     client_url = manifest['downloads']['client']['url']
     client_path = output_path / 'versions' / version_id / (version_id + '.jar')
@@ -60,9 +63,25 @@ def download_client(manifest, output_path):
 
     libs_path = output_path / 'libraries'
     for lib_info in manifest['libraries']:
+        rules = None
+        rules_passed = None
         if 'rules' in lib_info:
-            if not check_rules(lib_info['rules']):
-                continue
+            rules = lib_info['rules']
+            rules_passed = check_rules(rules)
+
+        if verbose:
+            print(
+                'Library {}: rules={}, rules_passed={}'.format(
+                    lib_info['name'],
+                    rules,
+                    rules_passed
+                ),
+                file=sys.stderr,
+                flush=True
+            )
+
+        if rules_passed is False:
+            continue
 
         lib_url = lib_info['downloads']['artifact']['url']
         lib_path = libs_path / lib_info['downloads']['artifact']['path']
@@ -87,6 +106,12 @@ def download_client(manifest, output_path):
                 native_lib_info = classifiers['natives-macos']
 
         if native_lib_info:
+            if verbose:
+                print(
+                    'Use native library {}'.format(native_lib_info),
+                    file=sys.stderr,
+                    flush=True
+                )
             native_lib_url = native_lib_info['url']
             native_lib_path = libs_path / native_lib_info['path']
             native_lib_sha1 = native_lib_info['sha1']
@@ -138,10 +163,24 @@ def get_versions_manifest():
 def get_version_manifest(version):
     versions_manifest = get_versions_manifest()
 
+    if verbose:
+        print(
+            'Requested version: {}'.format(version),
+            file=sys.stderr,
+            flush=True
+        )
+
     if version == 'release':
         version = versions_manifest['latest']['release']
     elif version == 'snapshot':
         version = versions_manifest['latest']['snapshot']
+
+    if verbose:
+        print(
+            'Resolved version: {}'.format(version),
+            file=sys.stderr,
+            flush=True
+        )
 
     version_info = None
     for info in versions_manifest['versions']:
@@ -150,6 +189,9 @@ def get_version_manifest(version):
             break
     if version_info is None:
         raise VersionException(version)
+
+    if verbose:
+        print('Version info: {}'.format(info), file=sys.stderr, flush=True)
 
     return request_json(version_info['url'])
 
@@ -166,7 +208,7 @@ def load_json_file(path):
 def download_files(downloads):
     total = len(downloads)
     if total == 0:
-        print('Everything is up-to-date')
+        print('Everything is up-to-date', file=sys.stderr, flush=True)
         return
 
     for i, download in enumerate(downloads):
@@ -174,7 +216,11 @@ def download_files(downloads):
         url = download['url']
         path = download['path']
         sha1 = download['sha1']
-        print('[{}/{}] Downloading {}...'.format(idx, total, url), flush=True)
+        print(
+            '[{}/{}] Downloading {}...'.format(idx, total, url),
+            file=sys.stderr,
+            flush=True
+        )
         download_and_verify_file(url, path, sha1, tries=5)
 
 
@@ -261,6 +307,9 @@ def create_launch_script(
     command = command.replace(r'${auth_xuid}', '0000')
     command = command.replace(r'${user_type}', 'mojang')
     command = command.replace(r'${version_type}', manifest['type'])
+
+    if verbose:
+        print('Command: {}'.format(command), file=sys.stderr, flush=True)
 
     create_script(output_path, 'mc-' + version_id, command)
 
@@ -377,10 +426,18 @@ if __name__ == '__main__':
     parser.add_argument(
         '--list-versions',
         action='store_true',
-        help='List available versions and exit'
+        help='list available versions and exit'
+    )
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+        help='enable verbose logging'
     )
 
     args = parser.parse_args()
+
+    if args.verbose:
+        verbose = True
 
     if args.list_versions:
         list_versions()
