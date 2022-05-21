@@ -75,15 +75,15 @@ def download_client(version, output_path, player_name):
 	command.append(manifest['mainClass'])
 	add_arguments(command, manifest['arguments']['game'])
 
-	natives_path = output_path / 'versions' / version_id / 'natives'
+	natives_path = pathlib.Path('versions') / version_id / 'natives'
 	class_path = make_class_path(output_path, jars)
 
 	command = ' '.join(command)
-	command = command.replace(r'${natives_directory}', str(natives_path))
+	command = command.replace(r'${natives_directory}', '"' + str(natives_path) + '"')
 	command = command.replace(r'${launcher_name}', 'mcdl')
 	command = command.replace(r'${launcher_version}', '1.0')
-	command = command.replace(r'${classpath}', class_path)
-	command = command.replace(r'${auth_player_name}', player_name)
+	command = command.replace(r'${classpath}', '"' + class_path + '"')
+	command = command.replace(r'${auth_player_name}', '"' + player_name + '"')
 	command = command.replace(r'${version_name}', version_id)
 	command = command.replace(r'${game_directory}', '.')
 	command = command.replace(r'${assets_root}', 'assets')
