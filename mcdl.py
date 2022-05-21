@@ -13,10 +13,10 @@ def list_versions():
 			version['type'],
 		))
 
-def download_client_and_create_launch_script(version, output_path, player_name):
+def download_client_and_create_launch_script(version, output_path, java_command, player_name):
 	manifest = get_version_manifest(version)
 	jars = download_client(manifest, output_path)
-	create_launch_script(manifest, output_path, jars, player_name)
+	create_launch_script(manifest, output_path, java_command, jars, player_name)
 
 def download_client(manifest, output_path):
 	version_id = manifest['id']
@@ -157,9 +157,9 @@ def calc_file_sha1(path):
 
 	return digest.hexdigest()
 
-def create_launch_script(manifest, output_path, jars, player_name):
+def create_launch_script(manifest, output_path, java_command, jars, player_name):
 	version_id = manifest['id']
-	command = ['java']
+	command = [java_command]
 	add_arguments(command, manifest['arguments']['jvm'])
 	command.append(manifest['mainClass'])
 	add_arguments(command, manifest['arguments']['game'])
@@ -184,24 +184,20 @@ def create_launch_script(manifest, output_path, jars, player_name):
 	command = command.replace(r'${user_type}', 'mojang')
 	command = command.replace(r'${version_type}', manifest['type'])
 
-	script_name = create_script(output_path, 'mc-' + version_id, command)
-	print('Created launch script', script_name)
+	create_script(output_path, 'mc-' + version_id, command)
 
 def create_script(output_path, script_base_name, command):
 	if platform.system() == 'Windows':
-		full_name = (script_base_name + '.bat')
-		path = output_path / full_name
+		path = output_path / (script_base_name + '.bat')
 		with open(path, 'w') as f:
 			f.write(command)
 	else:
-		full_name = (script_base_name + '.sh')
-		path = output_path / full_name
+		path = output_path / (script_base_name + '.sh')
 		with open(path, 'w') as f:
 			f.write('#!/bin/sh\n')
 			f.write(command)
 		st = os.stat(path)
 		os.chmod(path, st.st_mode | stat.S_IEXEC)
-	return full_name
 
 def add_arguments(command, args):
 	for arg in args:
@@ -269,7 +265,24 @@ if __name__ == '__main__':
 		default='release',
 		help='game version, use "release", "snapshot" or specific version'
 	)
-	parser.add_argument('-n', '--name', type=str, default='Player', help='player name')
+	parser.add_argument(
+		'-n', '--name',
+		type=str,
+		default='Anon',
+		help='player name'
+	)
+	parser.add_argument(
+		'-o', '--output',
+		type=pathlib.Path,
+		default=pathlib.Path.cwd(),
+		help='output path'
+	)
+	parser.add_argument(
+		'-j', '--java',
+		type=str,
+		default='java',
+		help='java command'
+	)
 	parser.add_argument(
 		'--list-versions',
 		action='store_true',
@@ -283,7 +296,7 @@ if __name__ == '__main__':
 		sys.exit(0)
 
 	try:
-		download_client_and_create_launch_script(args.version, pathlib.Path.cwd(), args.name)
+		download_client_and_create_launch_script(args.version, args.output, args.java, args.name)
 	except VersionException as e:
 		print('Unknown version: {}.'.format(e.version))
 		print('Run "mcdl.py --list-versions" to see all available versions.')
