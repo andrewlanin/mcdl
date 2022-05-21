@@ -13,12 +13,16 @@ def list_versions():
 			version['type'],
 		))
 
-def download_client(version, output_path, player_name):
+def download_client_and_create_launch_script(version, output_path, player_name):
 	manifest = get_version_manifest(version)
-	version_id = manifest['id']
+	jars = download_client(manifest, output_path)
+	create_launch_script(manifest, output_path, jars, player_name)
 
+def download_client(manifest, output_path):
+	version_id = manifest['id']
 	jars = []
 	downloads = []
+
 	print('Verifying instalation...')
 
 	client_url = manifest['downloads']['client']['url']
@@ -69,33 +73,7 @@ def download_client(version, output_path, player_name):
 			})
 
 	download_files(downloads)
-
-	command = ['java']
-	add_arguments(command, manifest['arguments']['jvm'])
-	command.append(manifest['mainClass'])
-	add_arguments(command, manifest['arguments']['game'])
-
-	natives_path = pathlib.Path('versions') / version_id / 'natives'
-	class_path = make_class_path(output_path, jars)
-
-	command = ' '.join(command)
-	command = command.replace(r'${natives_directory}', '"' + str(natives_path) + '"')
-	command = command.replace(r'${launcher_name}', 'mcdl')
-	command = command.replace(r'${launcher_version}', '1.0')
-	command = command.replace(r'${classpath}', '"' + class_path + '"')
-	command = command.replace(r'${auth_player_name}', '"' + player_name + '"')
-	command = command.replace(r'${version_name}', version_id)
-	command = command.replace(r'${game_directory}', '.')
-	command = command.replace(r'${assets_root}', 'assets')
-	command = command.replace(r'${assets_index_name}', assets_version)
-	command = command.replace(r'${auth_uuid}', str(uuid.uuid4()))
-	command = command.replace(r'${auth_access_token}', '00000000000000000000000000000000')
-	command = command.replace(r'${clientid}', '0000')
-	command = command.replace(r'${auth_xuid}', '0000')
-	command = command.replace(r'${user_type}', 'mojang')
-	command = command.replace(r'${version_type}', manifest['type'])
-
-	create_launch_script(output_path, 'mc-' + version_id, command)
+	return jars
 
 def get_versions_manifest():
 	url = 'https://launchermeta.mojang.com/mc/game/version_manifest.json'
@@ -179,6 +157,52 @@ def calc_file_sha1(path):
 
 	return digest.hexdigest()
 
+def create_launch_script(manifest, output_path, jars, player_name):
+	version_id = manifest['id']
+	command = ['java']
+	add_arguments(command, manifest['arguments']['jvm'])
+	command.append(manifest['mainClass'])
+	add_arguments(command, manifest['arguments']['game'])
+
+	natives_path = pathlib.Path('versions') / version_id / 'natives'
+	class_path = make_class_path(output_path, jars)
+
+	command = ' '.join(command)
+	command = command.replace(r'${natives_directory}', '"' + str(natives_path) + '"')
+	command = command.replace(r'${launcher_name}', 'mcdl')
+	command = command.replace(r'${launcher_version}', '1.0')
+	command = command.replace(r'${classpath}', '"' + class_path + '"')
+	command = command.replace(r'${auth_player_name}', '"' + player_name + '"')
+	command = command.replace(r'${version_name}', version_id)
+	command = command.replace(r'${game_directory}', '.')
+	command = command.replace(r'${assets_root}', 'assets')
+	command = command.replace(r'${assets_index_name}', manifest['assetIndex']['id'])
+	command = command.replace(r'${auth_uuid}', str(uuid.uuid4()))
+	command = command.replace(r'${auth_access_token}', '00000000000000000000000000000000')
+	command = command.replace(r'${clientid}', '0000')
+	command = command.replace(r'${auth_xuid}', '0000')
+	command = command.replace(r'${user_type}', 'mojang')
+	command = command.replace(r'${version_type}', manifest['type'])
+
+	script_name = create_script(output_path, 'mc-' + version_id, command)
+	print('Created launch script', script_name)
+
+def create_script(output_path, script_base_name, command):
+	if platform.system() == 'Windows':
+		full_name = (script_base_name + '.bat')
+		path = output_path / full_name
+		with open(path, 'w') as f:
+			f.write(command)
+	else:
+		full_name = (script_base_name + '.sh')
+		path = output_path / full_name
+		with open(path, 'w') as f:
+			f.write('#!/bin/sh\n')
+			f.write(command)
+		st = os.stat(path)
+		os.chmod(path, st.st_mode | stat.S_IEXEC)
+	return full_name
+
 def add_arguments(command, args):
 	for arg in args:
 		add_argument(command, arg)
@@ -226,19 +250,6 @@ def make_class_path(output_path, jars):
 	else:
 		return ':'.join(relative_paths)
 
-def create_launch_script(output_path, script_base_name, command):
-	if platform.system() == 'Windows':
-		path = output_path / (script_base_name + '.bat')
-		with open(path, 'w') as f:
-			f.write(command)
-	else:
-		path = output_path / (script_base_name + '.sh')
-		with open(path, 'w') as f:
-			f.write('#!/bin/sh\n')
-			f.write(command)
-		st = os.stat(path)
-		os.chmod(path, st.st_mode | stat.S_IEXEC)
-
 class VerificationException(Exception):
 	def __init__(self, url, path, expected_sha1, real_sha1):
 		self.url = url
@@ -272,7 +283,7 @@ if __name__ == '__main__':
 		sys.exit(0)
 
 	try:
-		download_client(args.version, pathlib.Path.cwd(), args.name)
+		download_client_and_create_launch_script(args.version, pathlib.Path.cwd(), args.name)
 	except VersionException as e:
 		print('Unknown version: {}.'.format(e.version))
 		print('Run "mcdl.py --list-versions" to see all available versions.')
