@@ -13,18 +13,17 @@ def list_versions():
 			version['type'],
 		))
 
-def download(version, player_name):
-	path = pathlib.Path()
+def download_client(version, output_path, player_name):
 	manifest = get_version_manifest(version)
 	version_id = manifest['id']
 
+	jars = []
 	downloads = []
-	class_path = []
 
 	client_url = manifest['downloads']['client']['url']
-	client_path = path / 'versions' / version_id / (version_id + '.jar')
+	client_path = output_path / 'versions' / manifest['id'] / (manifest['id'] + '.jar')
 	chient_sha1 = manifest['downloads']['client']['sha1']
-	class_path.append(str(client_path))
+	jars.append(client_path)
 	if not verify_file(client_path, chient_sha1):
 		downloads.append({
 			'url': client_url,
@@ -32,7 +31,7 @@ def download(version, player_name):
 			'sha1': chient_sha1
 		})
 
-	libs_path = path / 'libraries'
+	libs_path = output_path / 'libraries'
 	for lib_info in manifest['libraries']:
 		if 'rules' in lib_info:
 			if not check_rules(lib_info['rules']):
@@ -41,7 +40,7 @@ def download(version, player_name):
 		lib_url = lib_info['downloads']['artifact']['url']
 		lib_path = libs_path / lib_info['downloads']['artifact']['path']
 		lib_sha1 = lib_info['downloads']['artifact']['sha1']
-		class_path.append(str(lib_path))
+		jars.append(lib_path)
 		if not verify_file(lib_path, lib_sha1):
 			downloads.append({
 				'url': lib_url,
@@ -49,7 +48,7 @@ def download(version, player_name):
 				'sha1': lib_sha1
 			})
 
-	assets_path = path / 'assets'
+	assets_path = output_path / 'assets'
 	assets_version = manifest['assetIndex']['id']
 	assets_index_url = manifest['assetIndex']['url']
 	assets_index_path = assets_path / 'indexes' / (assets_version + '.json')
@@ -71,35 +70,12 @@ def download(version, player_name):
 	download_files(downloads)
 
 	command = ['java']
-
-	for arg in manifest['arguments']['jvm']:
-		if type(arg) is str:
-			command.append(arg)
-		elif type(arg) is dict:
-			if 'rules' in arg:
-				if check_rules(arg['rules']):
-					append_flat(command, arg['value'])
-		else:
-			print('Unexpected JVM argument: {}'.format(arg))
-
+	add_arguments(command, manifest['arguments']['jvm'])
 	command.append(manifest['mainClass'])
+	add_arguments(command, manifest['arguments']['game'])
 
-	for arg in manifest['arguments']['game']:
-		if type(arg) is str:
-			command.append(arg)
-		elif type(arg) is dict:
-			if 'rules' in arg:
-				if check_rules(arg['rules']):
-					append_flat(command, arg['value'])
-		else:
-			print('Unexpected game argument: {}'.format(arg))
-
-	natives_path = path / 'versions' / version_id / 'natives'
-
-	if platform.system() == 'Windows':
-		class_path = ';'.join(class_path)
-	else:
-		class_path = ':'.join(class_path)
+	natives_path = output_path / 'versions' / version_id / 'natives'
+	class_path = make_class_path(output_path, jars)
 
 	command = ' '.join(command)
 	command = command.replace(r'${natives_directory}', str(natives_path))
@@ -120,16 +96,16 @@ def download(version, player_name):
 	command = command.replace(r'Windows 10', '"Windows 10"')
 
 	if platform.system() == 'Windows':
-		bat_path = path / ('mc-' + version_id + '.bat')
-		with open(str(bat_path), 'w') as f:
+		bat_path = output_path / ('mc-' + version_id + '.bat')
+		with open(bat_path, 'w') as f:
 			f.write(command)
 	else:
-		sh_path = path / ('mc-' + version_id + '.sh')
-		with open(str(sh_path), 'w') as f:
+		sh_path = output_path / ('mc-' + version_id + '.sh')
+		with open(sh_path, 'w') as f:
 			f.write('#!/bin/sh\n')
 			f.write(command)
-		st = os.stat(str(sh_path))
-		os.chmod(str(sh_path), st.st_mode | stat.S_IEXEC)
+		st = os.stat(sh_path)
+		os.chmod(sh_path, st.st_mode | stat.S_IEXEC)
 
 def get_versions_manifest():
 	url = 'https://launchermeta.mojang.com/mc/game/version_manifest.json'
@@ -214,6 +190,22 @@ def calc_file_sha1(path):
 
 	return digest.hexdigest()
 
+def add_arguments(command, args):
+	for arg in args:
+		add_argument(command, arg)
+
+def add_argument(command, arg):
+	if type(arg) is str:
+		command.append(arg)
+	elif type(arg) is dict:
+		if 'rules' in arg:
+			if check_rules(arg['rules']):
+				append_flat(command, arg['value'])
+		else:
+			print('[WARN] Unexpected launch argument dict:', arg)
+	else:
+		print('[WARN] Unexpected launch argument:', arg)
+
 def check_rules(rules):
 	for rule in rules:
 		if not check_rule(rule):
@@ -232,6 +224,13 @@ def check_rule(rule):
 		return match
 	else:
 		return not match
+
+def make_class_path(output_path, jars):
+	relative_paths = [str(path.relative_to(output_path)) for path in jars]
+	if platform.system() == 'Windows':
+		return ';'.join(relative_paths)
+	else:
+		return ':'.join(relative_paths)
 
 def append_flat(l, val):
 	if type(val) is list:
@@ -272,7 +271,7 @@ if __name__ == '__main__':
 		sys.exit(0)
 
 	try:
-		download(args.version, args.name)
+		download_client(args.version, pathlib.Path.cwd(), args.name)
 	except VersionException as e:
 		print('Unknown version: {}.'.format(e.version))
 		print('Run "mcdl.py --list-versions" to see all available versions.')
