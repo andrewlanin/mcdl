@@ -19,9 +19,10 @@ def download_client(version, output_path, player_name):
 
 	jars = []
 	downloads = []
+	print('Verifying instalation...')
 
 	client_url = manifest['downloads']['client']['url']
-	client_path = output_path / 'versions' / manifest['id'] / (manifest['id'] + '.jar')
+	client_path = output_path / 'versions' / version_id / (version_id + '.jar')
 	chient_sha1 = manifest['downloads']['client']['sha1']
 	jars.append(client_path)
 	if not verify_file(client_path, chient_sha1):
@@ -95,25 +96,14 @@ def download_client(version, output_path, player_name):
 	command = command.replace(r'${version_type}', manifest['type'])
 	command = command.replace(r'Windows 10', '"Windows 10"')
 
-	if platform.system() == 'Windows':
-		bat_path = output_path / ('mc-' + version_id + '.bat')
-		with open(bat_path, 'w') as f:
-			f.write(command)
-	else:
-		sh_path = output_path / ('mc-' + version_id + '.sh')
-		with open(sh_path, 'w') as f:
-			f.write('#!/bin/sh\n')
-			f.write(command)
-		st = os.stat(sh_path)
-		os.chmod(sh_path, st.st_mode | stat.S_IEXEC)
+	create_launch_script(output_path, 'mc-' + version_id, command)
 
 def get_versions_manifest():
 	url = 'https://launchermeta.mojang.com/mc/game/version_manifest.json'
 	return request_json(url)
 
-def get_version_manifest(version, versions_manifest=None):
-	if versions_manifest is None:
-		versions_manifest = get_versions_manifest()
+def get_version_manifest(version):
+	versions_manifest = get_versions_manifest()
 
 	if version == 'release':
 		version = versions_manifest['latest']['release']
@@ -231,6 +221,19 @@ def make_class_path(output_path, jars):
 		return ';'.join(relative_paths)
 	else:
 		return ':'.join(relative_paths)
+
+def create_launch_script(output_path, script_base_name, command):
+	if platform.system() == 'Windows':
+		path = output_path / (script_base_name + '.bat')
+		with open(path, 'w') as f:
+			f.write(command)
+	else:
+		path = output_path / (script_base_name + '.sh')
+		with open(path, 'w') as f:
+			f.write('#!/bin/sh\n')
+			f.write(command)
+		st = os.stat(path)
+		os.chmod(path, st.st_mode | stat.S_IEXEC)
 
 def append_flat(l, val):
 	if type(val) is list:
