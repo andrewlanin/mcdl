@@ -51,8 +51,10 @@ def download(version, player_name):
 
 	assets_path = path / 'assets'
 	assets_version = manifest['assetIndex']['id']
+	assets_index_url = manifest['assetIndex']['url']
 	assets_index_path = assets_path / 'indexes' / (assets_version + '.json')
-	download_file(manifest['assetIndex']['url'], assets_index_path)
+	assets_index_sha1 = manifest['assetIndex']['sha1']
+	download_and_verify_file(assets_index_url, assets_index_path, assets_index_sha1)
 	assets_manifest = load_json_file(assets_index_path)
 
 	for asset in assets_manifest['objects'].values():
@@ -170,19 +172,18 @@ def download_files(downloads):
 		url = download['url']
 		path = download['path']
 		sha1 = download['sha1']
+		print('[{}/{}] Downloading {}...'.format(idx, total, url), flush=True)
+		download_and_verify_file(url, path, sha1, tries=5)
 
-		retries = 5
-		while retries > 0:
-			print('[{}/{}] Downloading {}...'.format(idx, total, url), flush=True)
-			download_file(url, path)
-			if verify_file(path, sha1):
-				break
-			else:
-				print('[{}/{}] Invalid hash, retrying...'.format(idx, total))
-				retries -= 1
+def download_and_verify_file(url, path, sha1, tries=1):
+	while tries > 0:
+		download_file(url, path)
+		if verify_file(path, sha1):
+			return
+		tries -= 1
 
-		if retries == 0:
-			raise VerificationException(url, path, sha1, calc_file_sha1(path))
+	if tries == 0:
+		raise VerificationException(url, path, sha1, calc_file_sha1(path))
 
 def download_file(url, path):
 	if path.exists():
@@ -191,6 +192,7 @@ def download_file(url, path):
 	if not path.parent.exists():
 		path.parent.mkdir(parents=True, exist_ok=True)
 
+	retries = 5
 	urllib.request.urlretrieve(url, str(path))
 
 def verify_file(path, sha1):
