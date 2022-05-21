@@ -94,7 +94,6 @@ def download_client(version, output_path, player_name):
 	command = command.replace(r'${auth_xuid}', '0000')
 	command = command.replace(r'${user_type}', 'mojang')
 	command = command.replace(r'${version_type}', manifest['type'])
-	command = command.replace(r'Windows 10', '"Windows 10"')
 
 	create_launch_script(output_path, 'mc-' + version_id, command)
 
@@ -186,11 +185,16 @@ def add_arguments(command, args):
 
 def add_argument(command, arg):
 	if type(arg) is str:
+		if ' ' in arg:
+			arg = '"' + arg + '"'
 		command.append(arg)
+	elif type(arg) is list:
+		for e in arg:
+			add_argument(command, e)
 	elif type(arg) is dict:
 		if 'rules' in arg:
 			if check_rules(arg['rules']):
-				append_flat(command, arg['value'])
+				add_argument(command, arg['value'])
 		else:
 			print('[WARN] Unexpected launch argument dict:', arg)
 	else:
@@ -234,12 +238,6 @@ def create_launch_script(output_path, script_base_name, command):
 			f.write(command)
 		st = os.stat(path)
 		os.chmod(path, st.st_mode | stat.S_IEXEC)
-
-def append_flat(l, val):
-	if type(val) is list:
-		l += val
-	else:
-		l.append(val)
 
 class VerificationException(Exception):
 	def __init__(self, url, path, expected_sha1, real_sha1):
