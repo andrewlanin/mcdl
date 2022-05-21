@@ -2,7 +2,7 @@
 import argparse, json, os, pathlib, platform, urllib.request, uuid, stat, sys
 
 def list_versions():
-	manifest = request_versions_manifest()
+	manifest = get_versions_manifest()
 	print('Latest release:  {}'.format(manifest['latest']['release']))
 	print('Latest snapshot: {}'.format(manifest['latest']['snapshot']))
 	print('All versions:')
@@ -15,25 +15,11 @@ def list_versions():
 
 def download(version, player_name):
 	path = pathlib.Path()
-	version_manifest = request_versions_manifest()
-
-	version_info = None
-	for info in version_manifest['versions']:
-		if info['id'] == version:
-			version_info = info
-			break
-
-	if version_info is None:
-		raise VersionException()
-
-	manifest_url = version_info['url']
-	manifest_path = path / 'versions' / version / (version + '.json')
-	download_file(manifest_url, manifest_path)
-	manifest = load_json(manifest_path)
-
+	manifest = get_version_manifest(version)
+	version_id = manifest['id']
 	class_path = []
 
-	client_path = path / 'versions' / version / (version + '.jar')
+	client_path = path / 'versions' / version_id / (version_id + '.jar')
 	download_file(manifest['downloads']['client']['url'], client_path)
 	class_path.append(str(client_path))
 
@@ -84,7 +70,7 @@ def download(version, player_name):
 		else:
 			print('Unexpected game argument: {}'.format(arg))
 
-	natives_path = path / 'versions' / version / 'natives'
+	natives_path = path / 'versions' / version_id / 'natives'
 
 	if platform.system() == 'Windows':
 		class_path = ';'.join(class_path)
@@ -97,7 +83,7 @@ def download(version, player_name):
 	command = command.replace(r'${launcher_version}', '1.0')
 	command = command.replace(r'${classpath}', class_path)
 	command = command.replace(r'${auth_player_name}', player_name)
-	command = command.replace(r'${version_name}', version)
+	command = command.replace(r'${version_name}', version_id)
 	command = command.replace(r'${game_directory}', '.')
 	command = command.replace(r'${assets_root}', 'assets')
 	command = command.replace(r'${assets_index_name}', assets_version)
@@ -110,20 +96,39 @@ def download(version, player_name):
 	command = command.replace(r'Windows 10', '"Windows 10"')
 
 	if platform.system() == 'Windows':
-		bat_path = path / ('mc-' + version + '.bat')
+		bat_path = path / ('mc-' + version_id + '.bat')
 		with open(str(bat_path), 'w') as f:
 			f.write(command)
 	else:
-		sh_path = path / ('mc-' + version + '.sh')
+		sh_path = path / ('mc-' + version_id + '.sh')
 		with open(str(sh_path), 'w') as f:
 			f.write('#!/bin/sh\n')
 			f.write(command)
 		st = os.stat(str(sh_path))
 		os.chmod(str(sh_path), st.st_mode | stat.S_IEXEC)
 
-def request_versions_manifest():
+def get_versions_manifest():
 	url = 'https://launchermeta.mojang.com/mc/game/version_manifest.json'
 	return request_json(url)
+
+def get_version_manifest(version, versions_manifest=None):
+	if versions_manifest is None:
+		versions_manifest = get_versions_manifest()
+
+	if version == 'release':
+		version = versions_manifest['latest']['release']
+	elif version == 'snapshot':
+		version = versions_manifest['latest']['snapshot']
+
+	version_info = None
+	for info in versions_manifest['versions']:
+		if info['id'] == version:
+			version_info = info
+			break
+	if version_info is None:
+		raise VersionException()
+
+	return request_json(version_info['url'])
 
 def request_json(url):
 	return json.load(urllib.request.urlopen(url))
@@ -173,7 +178,12 @@ class VersionException(Exception):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Download Minecraft client')
-	parser.add_argument('-v', '--version', type=str, default='1.18.2', help='game version')
+	parser.add_argument(
+		'-v', '--version',
+		type=str,
+		default='release',
+		help='game version, use "release", "snapshot" or specific version'
+	)
 	parser.add_argument('-n', '--name', type=str, default='Player', help='player name')
 	parser.add_argument(
 		'--list-versions',
