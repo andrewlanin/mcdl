@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 import argparse, json, os, pathlib, platform, urllib.request, uuid, stat, sys
 
+def list_versions():
+	manifest = request_versions_manifest()
+	print('Latest release:  {}'.format(manifest['latest']['release']))
+	print('Latest snapshot: {}'.format(manifest['latest']['snapshot']))
+	print('All versions:')
+	for version in manifest['versions']:
+		print('    {} {}    {}'.format(
+			version['id'].ljust(25, ' '),
+			version['releaseTime'][:10],
+			version['type'],
+		))
+
 def download(version, player_name):
 	path = pathlib.Path()
-	version_manifest_url = 'https://launchermeta.mojang.com/mc/game/version_manifest.json'
-	version_manifest_path = path / 'versions' / 'version_manifest_v2.json'
-	download_file(version_manifest_url, version_manifest_path)
-	version_manifest = load_json(version_manifest_path)
+	version_manifest = request_versions_manifest()
 
 	version_info = None
 	for info in version_manifest['versions']:
@@ -15,7 +24,7 @@ def download(version, player_name):
 			break
 
 	if version_info is None:
-		raise Exception('Unknown version {}'.format(version))
+		raise VersionException()
 
 	manifest_url = version_info['url']
 	manifest_path = path / 'versions' / version / (version + '.json')
@@ -112,6 +121,13 @@ def download(version, player_name):
 		st = os.stat(str(sh_path))
 		os.chmod(str(sh_path), st.st_mode | stat.S_IEXEC)
 
+def request_versions_manifest():
+	url = 'https://launchermeta.mojang.com/mc/game/version_manifest.json'
+	return request_json(url)
+
+def request_json(url):
+	return json.load(urllib.request.urlopen(url))
+
 def load_json(path):
 	with open(str(path)) as f:
 		return json.load(f)
@@ -152,10 +168,29 @@ def append_flat(l, val):
 	else:
 		l.append(val)
 
+class VersionException(Exception):
+	pass
+
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Download Minecraft client')
 	parser.add_argument('-v', '--version', type=str, default='1.18.2', help='game version')
 	parser.add_argument('-n', '--name', type=str, default='Player', help='player name')
+	parser.add_argument(
+		'--list-versions',
+		action='store_true',
+		help='List available versions and exit'
+	)
 
 	args = parser.parse_args()
-	download(args.version, args.name)
+
+	if args.list_versions:
+		list_versions()
+		sys.exit(0)
+
+	try:
+		download(args.version, args.name)
+	except VersionException:
+		print('Unknown version: {}.'.format(args.version))
+		print('Run "mcdl.py --list-versions" to see all available versions.')
+		sys.exit(1)
+
