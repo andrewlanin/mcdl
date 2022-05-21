@@ -75,6 +75,29 @@ def download_client(manifest, output_path):
                 'sha1': lib_sha1
             })
 
+        native_lib_info = None
+        if 'classifiers' in lib_info['downloads']:
+            os = platform.system()
+            classifiers = lib_info['downloads']['classifiers']
+            if os == 'Windows' and 'natives-windows' in classifiers:
+                native_lib_info = classifiers['natives-windows']
+            elif os == 'Linux' and 'natives-linux' in classifiers:
+                native_lib_info = classifiers['natives-linux']
+            elif os == 'Darwin' and 'natives-macos' in classifiers:
+                native_lib_info = classifiers['natives-macos']
+
+        if native_lib_info:
+            native_lib_url = native_lib_info['url']
+            native_lib_path = libs_path / native_lib_info['path']
+            native_lib_sha1 = native_lib_info['sha1']
+            jars.append(native_lib_path)
+            if not verify_file(native_lib_path, native_lib_sha1):
+                downloads.append({
+                    'url': native_lib_url,
+                    'path': native_lib_path,
+                    'sha1': native_lib_sha1
+                })
+
     assets_path = output_path / 'assets'
     assets_version = manifest['assetIndex']['id']
     assets_index_url = manifest['assetIndex']['url']
