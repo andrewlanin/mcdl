@@ -88,7 +88,7 @@ def download_client(manifest, output_path):
             lib_url = lib_info['downloads']['artifact']['url']
             lib_path = libs_path / lib_info['downloads']['artifact']['path']
             lib_sha1 = lib_info['downloads']['artifact']['sha1']
-            if not lib_path in jars:
+            if lib_path not in jars:
                 jars.append(lib_path)
             if not verify_file(lib_path, lib_sha1):
                 downloads.append({
@@ -120,7 +120,7 @@ def download_client(manifest, output_path):
             native_lib_url = native_lib_info['url']
             native_lib_path = libs_path / native_lib_info['path']
             native_lib_sha1 = native_lib_info['sha1']
-            if not native_lib_path in jars:
+            if native_lib_path not in jars:
                 jars.append(native_lib_path)
             if not verify_file(native_lib_path, native_lib_sha1):
                 downloads.append({
@@ -373,8 +373,12 @@ def check_rules(rules):
     for rule in rules:
         allow = check_rule(rule)
         if verbose:
-            print('Rule {}: allow={}'.format(rule, allow), file=sys.stderr, flush=True)
-        if not allow is None:
+            print(
+                'Rule {}: allow={}'.format(rule, allow),
+                file=sys.stderr,
+                flush=True
+            )
+        if allow is not None:
             result = allow
     return result
 
@@ -386,7 +390,7 @@ def check_rule(rule):
     for k, v in rule.items():
         if k == 'action':
             allow = v == 'allow'
-        elif k =='os':
+        elif k == 'os':
             for k, v in v.items():
                 if k == 'name':
                     current_os = platform.system()
@@ -401,7 +405,10 @@ def check_rule(rule):
                     match = match and re.match(v, platform.version())
                 else:
                     print(
-                        'WARN: Unexpected key os.{} in rule {}'.format(k, rule),
+                        'WARN: Unexpected key os.{} in rule {}'.format(
+                            k,
+                            rule
+                        ),
                         file=sys.stderr,
                         flush=True
                     )
