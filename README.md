@@ -1,5 +1,3 @@
-🟩⬇️
-
 **MCDL** is a tool that downloads minecraft client from official CDN and generates launch script for it. It is a replacement for bloated proprietary launchers. Just run simple python script and play any version of the game you want.
 
 ## Features
