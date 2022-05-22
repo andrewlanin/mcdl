@@ -321,6 +321,7 @@ def create_script(output_path, script_base_name, command):
     if platform.system() == 'Windows':
         path = output_path / (script_base_name + '.bat')
         with open(path, 'w') as f:
+            f.write('cd /D "%~dp0"\n')
             f.write(command)
     else:
         path = output_path / (script_base_name + '.sh')
