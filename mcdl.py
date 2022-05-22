@@ -326,6 +326,7 @@ def create_script(output_path, script_base_name, command):
         path = output_path / (script_base_name + '.sh')
         with open(path, 'w') as f:
             f.write('#!/bin/sh\n')
+            f.write('cd $(dirname $0)\n')
             f.write(command)
         st = os.stat(path)
         os.chmod(path, st.st_mode | stat.S_IEXEC)
