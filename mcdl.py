@@ -84,16 +84,18 @@ def download_client(manifest, output_path):
         if rules_passed is False:
             continue
 
-        lib_url = lib_info['downloads']['artifact']['url']
-        lib_path = libs_path / lib_info['downloads']['artifact']['path']
-        lib_sha1 = lib_info['downloads']['artifact']['sha1']
-        jars.append(lib_path)
-        if not verify_file(lib_path, lib_sha1):
-            downloads.append({
-                'url': lib_url,
-                'path': lib_path,
-                'sha1': lib_sha1
-            })
+        if 'artifact' in lib_info['downloads']:
+            lib_url = lib_info['downloads']['artifact']['url']
+            lib_path = libs_path / lib_info['downloads']['artifact']['path']
+            lib_sha1 = lib_info['downloads']['artifact']['sha1']
+            if not lib_path in jars:
+                jars.append(lib_path)
+            if not verify_file(lib_path, lib_sha1):
+                downloads.append({
+                    'url': lib_url,
+                    'path': lib_path,
+                    'sha1': lib_sha1
+                })
 
         native_lib_info = None
         if 'classifiers' in lib_info['downloads']:
@@ -118,7 +120,8 @@ def download_client(manifest, output_path):
             native_lib_url = native_lib_info['url']
             native_lib_path = libs_path / native_lib_info['path']
             native_lib_sha1 = native_lib_info['sha1']
-            jars.append(native_lib_path)
+            if not native_lib_path in jars:
+                jars.append(native_lib_path)
             if not verify_file(native_lib_path, native_lib_sha1):
                 downloads.append({
                     'url': native_lib_url,
@@ -278,9 +281,18 @@ def create_launch_script(
         player_name):
     version_id = manifest['id']
     command = [java_command]
-    add_arguments(command, manifest['arguments']['jvm'])
+
+    if 'arguments' in manifest:
+        add_arguments(command, manifest['arguments']['jvm'])
+    else:
+        add_arguments(command, ['-cp', r'${classpath}'])
+
     command.append(manifest['mainClass'])
-    add_arguments(command, manifest['arguments']['game'])
+
+    if 'arguments' in manifest:
+        add_arguments(command, manifest['arguments']['game'])
+    elif 'minecraftArguments' in manifest:
+        add_arguments(command, manifest['minecraftArguments'].split(' '))
 
     natives_path = pathlib.Path('versions') / version_id / 'natives'
     class_path = make_class_path(output_path, jars)
