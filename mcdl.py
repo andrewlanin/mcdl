@@ -242,13 +242,9 @@ def download_and_verify_file(url, path, sha1, tries=1):
 
 
 def download_file(url, path):
-    if path.exists():
-        return
-
     if not path.parent.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
 
-    retries = 5
     urllib.request.urlretrieve(url, str(path))
 
 
