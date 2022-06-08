@@ -35,13 +35,28 @@ def download_client_and_create_launch_script(
         player_name):
     manifest = get_version_manifest(version)
     jars = download_client(manifest, output_path)
-    create_launch_script(
+    create_client_launch_script(
         manifest,
         output_path,
         java_command,
         jars,
         player_name
     )
+
+
+def download_server_and_create_launch_script(
+        version,
+        output_path,
+        java_command):
+    manifest = get_version_manifest(version)
+    jar = download_server(manifest, output_path)
+    create_server_launch_script(
+        manifest,
+        output_path,
+        java_command,
+        jar
+    )
+    accept_server_eula(output_path)
 
 
 def download_client(manifest, output_path):
@@ -52,7 +67,7 @@ def download_client(manifest, output_path):
     print('Verifying instalation...', file=sys.stderr, flush=True)
 
     client_url = manifest['downloads']['client']['url']
-    client_path = output_path / 'versions' / version_id / (version_id + '.jar')
+    client_path = output_path / 'versions' / version_id / 'client.jar'
     chient_sha1 = manifest['downloads']['client']['sha1']
     jars.append(client_path)
     if not verify_file(client_path, chient_sha1):
@@ -159,6 +174,26 @@ def download_client(manifest, output_path):
 
     download_files(downloads)
     return jars
+
+
+def download_server(manifest, output_path):
+    version_id = manifest['id']
+    downloads = []
+
+    print('Verifying instalation...', file=sys.stderr, flush=True)
+
+    server_url = manifest['downloads']['server']['url']
+    server_path = output_path / 'versions' / version_id / 'server.jar'
+    server_sha1 = manifest['downloads']['server']['sha1']
+    if not verify_file(server_path, server_sha1):
+        downloads.append({
+            'url': server_url,
+            'path': server_path,
+            'sha1': server_sha1
+        })
+
+    download_files(downloads)
+    return server_path
 
 
 def get_versions_manifest():
@@ -269,7 +304,7 @@ def calc_file_sha1(path):
     return digest.hexdigest()
 
 
-def create_launch_script(
+def create_client_launch_script(
         manifest,
         output_path,
         java_command,
@@ -323,6 +358,24 @@ def create_launch_script(
         print('Command: {}'.format(command), file=sys.stderr, flush=True)
 
     create_script(output_path, 'mc-' + version_id, command)
+
+
+def create_server_launch_script(
+        manifest,
+        output_path,
+        java_command,
+        jar_path):
+    version_id = manifest['id']
+    command = ' '.join([
+        java_command,
+        '-jar', str(jar_path.relative_to(output_path)),
+        '-nogui'
+    ])
+
+    if verbose:
+        print('Command: {}'.format(command), file=sys.stderr, flush=True)
+
+    create_script(output_path, 'mc-' + version_id + '-server', command)
 
 
 def create_script(output_path, script_base_name, command):
@@ -442,6 +495,11 @@ def make_class_path(output_path, jars):
         return ':'.join(relative_paths)
 
 
+def accept_server_eula(output_path):
+    with open(output_path / 'eula.txt', 'w') as f:
+        f.write('eula=true\n')
+
+
 class VerificationException(Exception):
     def __init__(self, url, path, expected_sha1, real_sha1):
         self.url = url
@@ -482,6 +540,11 @@ if __name__ == '__main__':
         help='java command'
     )
     parser.add_argument(
+        '-s', '--server',
+        action='store_true',
+        help='download server instead of client'
+    )
+    parser.add_argument(
         '--list-versions',
         action='store_true',
         help='list available versions and exit'
@@ -502,12 +565,19 @@ if __name__ == '__main__':
         sys.exit(0)
 
     try:
-        download_client_and_create_launch_script(
-            args.version,
-            args.output,
-            args.java,
-            args.name
-        )
+        if args.server:
+            download_server_and_create_launch_script(
+                args.version,
+                args.output,
+                args.java
+            )
+        else:
+            download_client_and_create_launch_script(
+                args.version,
+                args.output,
+                args.java,
+                args.name
+            )
     except VersionException as e:
         print('Unknown version: {}.'.format(e.version))
         print('Run "mcdl.py --list-versions" to see all available versions.')
