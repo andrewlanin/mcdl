@@ -15,5 +15,5 @@
 
 ## Examples
 - `./mcdl.py --list-versions`
-- `./mcdl.py -o game_dir -v 1.19 -n player_name # download client`
-- `./mcdl.py -o game_dir -v 1.19 -s # download sever`
+- `./mcdl.py -o game_dir -v 1.19 -n player_name` - download client
+- `./mcdl.py -o game_dir -v 1.19 -s` - download sever
