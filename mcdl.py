@@ -257,6 +257,8 @@ def download_files(downloads):
         url = download['url']
         path = download['path']
         sha1 = download['sha1']
+        if url.startswith("http://"):
+            url = ("https://" + url[7:])
         print(
             '[{}/{}] Downloading {}...'.format(idx, total, url),
             file=sys.stderr,
