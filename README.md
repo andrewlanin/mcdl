@@ -4,7 +4,7 @@
 - FOSS
 - Single simple hackable script
 - Windows, Linux, Mac support
-- MC 1.13 - 1.19 support
+- MC 1.13 - 1.21 support
 - Vanilla game from official sources
 - Incremental download
 - Verifies files on disk

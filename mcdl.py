@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import os
 import pathlib
 import platform
 import re
-import urllib.request
-import uuid
 import stat
 import sys
+import urllib.request
+import uuid
 
 
 verbose = False
@@ -252,19 +253,26 @@ def download_files(downloads):
         print('Everything is up-to-date', file=sys.stderr, flush=True)
         return
 
-    for i, download in enumerate(downloads):
-        idx = i + 1
+    def task(download):
         url = download['url']
         path = download['path']
         sha1 = download['sha1']
         if url.startswith("http://"):
             url = ("https://" + url[7:])
-        print(
-            '[{}/{}] Downloading {}...'.format(idx, total, url),
-            file=sys.stderr,
-            flush=True
-        )
         download_and_verify_file(url, path, sha1, tries=5)
+        return url
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
+        futures = [executor.submit(task, download) for download in downloads]
+        idx = 0
+        for future in concurrent.futures.as_completed(futures):
+            url = future.result()
+            idx += 1
+            print(
+                '[{}/{}] Downloaded {}'.format(idx, total, url),
+                file=sys.stderr,
+                flush=True
+            )
 
 
 def download_and_verify_file(url, path, sha1, tries=1):
